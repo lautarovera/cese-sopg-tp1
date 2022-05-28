@@ -11,48 +11,8 @@
 #define FIFO_NAME "Fifo"
 #define SIGN_FILE_NAME "Sign.txt"
 #define DATA_FILE_NAME "Log.txt"
-#define BUFFER_SIZE 300
-
-typedef enum
-{
-    SIGN,
-    DATA,
-    FAIL
-} parser_t;
-
-static parser_t parser(uint8_t *str)
-{
-    parser_t ret_code = FAIL;
-    char *token;
-
-    if ((token = strtok(str, ":")) != NULL)
-    {
-        if (!strcmp(token, "SIGN\0"))
-        {
-            token = strtok(NULL, "\0");
-            memset(str, 0, strlen(str));
-            sprintf(str, "%s\n", token);
-            ret_code = SIGN;
-        }
-        else if (!strcmp(token, "DATA\0"))
-        {
-            token = strtok(NULL, "\0");
-            memset(str, 0, strlen(str));
-            sprintf(str, "%s\n", token);
-            ret_code = DATA;
-        }
-        else
-        {
-            /* No parsing available */
-        }
-    }
-    else
-    {
-        /* No parsing available */
-    }
-
-    return ret_code;
-}
+#define PREFIX_SIZE 5u
+#define BUFFER_SIZE 300u
 
 int main(void)
 {
@@ -91,18 +51,20 @@ int main(void)
             uint32_t bytes_wrote;
             const char *file_name;
             input_buffer[bytes_read] = '\0';
+            char *msg = malloc(strlen(input_buffer) - PREFIX_SIZE);
+
             printf("Reader: read %d bytes: \"%s\"\n", bytes_read, input_buffer);
 
-            switch (parser(input_buffer))
+            if (sscanf(input_buffer, "SIGN:%s", msg) == 1)
             {
-            case SIGN:
                 file_name = SIGN_FILE_NAME;
-                break;
-            case DATA:
+            }
+            else if (sscanf(input_buffer, "DATA:%s", msg) == 1)
+            {
                 file_name = DATA_FILE_NAME;
-                break;
-            case FAIL:
-            default:
+            }
+            else
+            {
                 printf("Format must be 'DATA:XXXXXXXX'\n");
                 continue;
             }
@@ -121,15 +83,14 @@ int main(void)
             }
 
             /* Write buffer to regular file */
-            if ((bytes_wrote = write(fd_file, input_buffer, strlen(input_buffer))) == -1)
+            if ((bytes_wrote = write(fd_file, msg, strlen(msg))) == -1)
             {
                 perror("Reader");
             }
             else
             {
                 printf("Reader: wrote %d bytes in %s\n", bytes_wrote, file_name);
-                // int l = lseek(fd_file, bytes_wrote, SEEK_CUR);
-                // printf("SEEK POINTER: %d\n", l);
+                free(msg);
             }
 
             if (close(fd_file) < 0)
